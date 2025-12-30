@@ -1,0 +1,5 @@
+{
+  "name": "FinFluencer Accuracy Tracker",
+  "description": "A public research tool for evaluating the accuracy of financial predictions made in YouTube videos using verifiable market data.",
+  "requestFramePermissions": []
+}
