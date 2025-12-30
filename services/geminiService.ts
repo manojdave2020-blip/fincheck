@@ -4,7 +4,7 @@ import { Prediction, PredictionStatus, MarketDataPoint } from "../types";
 
 export class GeminiService {
   /**
-   * Uses Gemini to analyze video content via search/grounding to extract claims.
+   * Uses Flash for claim extraction. It's faster and sufficient for text parsing.
    */
   async extractVideoClaims(videoTitle: string, videoUrl: string): Promise<{ 
     claims: Partial<Prediction>[], 
@@ -12,15 +12,12 @@ export class GeminiService {
   }> {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
+    // Switch to Flash for cost efficiency on simple text extraction
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Search for the transcript or key content of this YouTube video: "${videoTitle}" (${videoUrl}).
-      Identify specific, verifiable financial predictions (e.g., "S&P 500 to 5000 by June").
-      
-      RULES:
-      1. ONLY extract claims with a specific asset, target, and timeframe.
-      2. Exclude vague advice.
-      3. Return an empty array if no specific targets are found.`,
+      contents: `Video: "${videoTitle}" (${videoUrl}). 
+      Find specific, verifiable financial predictions (Price Targets, Buy/Sell calls).
+      Only include claims with a clear asset, target price, and timeframe.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -33,7 +30,8 @@ export class GeminiService {
               timestamp: { type: Type.STRING },
               structuredClaim: { type: Type.STRING },
               asset: { type: Type.STRING }
-            }
+            },
+            required: ["rawQuote", "structuredClaim", "asset"]
           }
         }
       }
@@ -42,12 +40,13 @@ export class GeminiService {
     const claims = JSON.parse(response.text || '[]');
     return {
       claims,
-      isAnalysisHeavy: claims.length > 8
+      isAnalysisHeavy: claims.length > 5
     };
   }
 
   /**
-   * Verifies a single claim against real-time market data using Gemini 3 Pro.
+   * Verifies a claim using Pro with Google Search grounding. 
+   * This is the only place we use the high-tier model for accuracy.
    */
   async verifyClaim(claim: string): Promise<{
     status: PredictionStatus;
@@ -58,10 +57,8 @@ export class GeminiService {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
-      contents: `Verify this financial prediction against real-world historical and current market prices: "${claim}".
-      1. Determine if the target was hit within the stated timeframe.
-      2. Provide 3 specific price data points (date/price) that prove the outcome.
-      3. Assign an accuracy score from 0.0 to 1.0.`,
+      contents: `Verify this financial target using Google Search for real-time market data: "${claim}". 
+      Check if the price was hit during the mentioned timeframe. Provide proof data.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -82,7 +79,8 @@ export class GeminiService {
                 }
               }
             }
-          }
+          },
+          required: ["status", "score", "explanation", "marketData"]
         }
       }
     });

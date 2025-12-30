@@ -9,17 +9,31 @@ const CreatorProfilePage: React.FC = () => {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<'timeline' | 'accuracy'>('timeline');
   const [claims, setClaims] = useState<any[]>(location.state?.claims || []);
+  const [creator, setCreator] = useState<any>(location.state?.creator || null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
-  const creator = location.state?.creator || {
-    name: id,
-    handle: `@${id}`,
-    avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${id}`,
-    description: "Researching channel profile...",
-    totalPredictions: 0,
-    isAnalysisHeavy: false,
-    avgAccuracy: 0
-  };
+  useEffect(() => {
+    // If no state passed (e.g. direct link or seeded data click), check local storage
+    if (!creator && id) {
+      const seededAudits = JSON.parse(localStorage.getItem('seeded_audits') || '{}');
+      const seeded = seededAudits[id];
+      if (seeded) {
+        setCreator(seeded.creator);
+        setClaims(seeded.claims);
+      } else {
+        // Fallback for non-seeded/non-audited
+        setCreator({
+          name: id,
+          handle: `@${id}`,
+          avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${id}`,
+          description: "Researching channel profile...",
+          totalPredictions: 0,
+          isAnalysisHeavy: false,
+          avgAccuracy: 0
+        });
+      }
+    }
+  }, [id, creator]);
 
   const handleVerify = async (claimId: string, text: string) => {
     if (verifyingId) return;
@@ -36,8 +50,8 @@ const CreatorProfilePage: React.FC = () => {
     }
   };
 
-  if (!location.state?.creator && id !== 'dynamic') {
-     return <div className="p-20 text-center"><Link to="/" className="text-indigo-600 font-bold">Start a search on the home page</Link> to research this creator.</div>;
+  if (!creator) {
+     return <div className="p-20 text-center text-slate-500 font-medium">Loading research profile...</div>;
   }
 
   const sortedClaims = activeTab === 'accuracy' 
@@ -84,50 +98,58 @@ const CreatorProfilePage: React.FC = () => {
         </button>
       </div>
 
-      <div className="space-y-6 max-w-4xl">
-        {sortedClaims.map((claim) => (
-          <div key={claim.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:border-slate-400 transition-all">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="font-bold text-slate-900 mb-1">{claim.videoTitle}</h3>
-                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">{claim.videoDate} • {claim.timestamp}</p>
-              </div>
-              {claim.status !== "Pending Verification" ? (
-                <div className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-widest border ${
-                  claim.status === 'Accurate' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-rose-50 text-rose-700 border-rose-100'
-                }`}>
-                  {claim.status}
+      {claims.length === 0 ? (
+        <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-200">
+          <p className="text-slate-400 font-medium">No verifiable claims found in recent filtered content.</p>
+        </div>
+      ) : (
+        <div className="space-y-6 max-w-4xl">
+          {sortedClaims.map((claim) => (
+            <div key={claim.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:border-slate-400 transition-all">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="font-bold text-slate-900 mb-1">{claim.videoTitle}</h3>
+                  <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">{claim.videoDate} • {claim.timestamp}</p>
                 </div>
-              ) : null}
-            </div>
+                {claim.status !== "Pending Verification" ? (
+                  <div className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-widest border ${
+                    claim.status === 'Accurate' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+                    claim.status === 'Partially Accurate' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                    'bg-rose-50 text-rose-700 border-rose-100'
+                  }`}>
+                    {claim.status}
+                  </div>
+                ) : null}
+              </div>
 
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 mb-6 italic text-slate-600 text-sm">
-              "{claim.rawQuote}"
-            </div>
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 mb-6 italic text-slate-600 text-sm">
+                "{claim.rawQuote}"
+              </div>
 
-            <div className="flex justify-between items-center pt-4 border-t border-slate-50">
-               <div className="text-xs text-slate-400 font-medium">Target: <span className="text-slate-900 font-bold">{claim.structuredClaim}</span></div>
-               {claim.status === "Pending Verification" ? (
-                 <button 
-                   onClick={() => handleVerify(claim.id, claim.structuredClaim)}
-                   disabled={verifyingId === claim.id}
-                   className="text-xs font-bold text-white bg-slate-900 px-4 py-2 rounded-lg hover:bg-slate-800 disabled:opacity-50"
-                 >
-                   {verifyingId === claim.id ? 'Verifying...' : 'Verify Real-Time'}
-                 </button>
-               ) : (
-                 <Link 
-                   to={`/claim/${claim.id}`} 
-                   state={{ prediction: claim }}
-                   className="text-xs font-bold text-slate-900 bg-slate-100 px-4 py-2 rounded-lg hover:bg-slate-200"
-                 >
-                   View Detailed Receipts
-                 </Link>
-               )}
+              <div className="flex justify-between items-center pt-4 border-t border-slate-50">
+                 <div className="text-xs text-slate-400 font-medium">Target: <span className="text-slate-900 font-bold">{claim.structuredClaim}</span></div>
+                 {claim.status === "Pending Verification" ? (
+                   <button 
+                     onClick={() => handleVerify(claim.id, claim.structuredClaim)}
+                     disabled={verifyingId === claim.id}
+                     className="text-xs font-bold text-white bg-slate-900 px-4 py-2 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+                   >
+                     {verifyingId === claim.id ? 'Verifying...' : 'Verify Real-Time'}
+                   </button>
+                 ) : (
+                   <Link 
+                     to={`/claim/${claim.id}`} 
+                     state={{ prediction: claim }}
+                     className="text-xs font-bold text-slate-900 bg-slate-100 px-4 py-2 rounded-lg hover:bg-slate-200"
+                   >
+                     View Detailed Receipts
+                   </Link>
+                 )}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
