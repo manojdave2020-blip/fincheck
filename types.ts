@@ -2,13 +2,13 @@
 export interface Creator {
   id: string;
   name: string;
-  channelUrl: string;
+  handle: string;
   avatar: string;
-  avgAccuracy: number;
+  description: string;
+  niche: string;
   totalPredictions: number;
-  unverifiableCount: number;
-  timeSpan: string;
   isAnalysisHeavy?: boolean;
+  avgAccuracy?: number;
 }
 
 export enum PredictionStatus {
@@ -20,7 +20,6 @@ export enum PredictionStatus {
 
 export interface Prediction {
   id: string;
-  creatorId: string;
   videoTitle: string;
   videoDate: string;
   videoUrl: string;
@@ -37,10 +36,4 @@ export interface MarketDataPoint {
   date: string;
   price: string;
   asset: string;
-}
-
-export interface VideoFilter {
-  keywords: string[];
-  minDuration: number; // minutes
-  excludeShorts: boolean;
 }

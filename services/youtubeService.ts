@@ -24,20 +24,19 @@ export class YouTubeService {
   async resolveChannel(input: string): Promise<ResolvedChannel> {
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
-      throw new Error("API_KEY is not defined. Please check your Vercel Environment Variables.");
+      throw new Error("API_KEY is not defined.");
     }
 
     const ai = new GoogleGenAI({ apiKey });
     
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Search YouTube for "${input}". 
+      contents: `Search YouTube for the channel "${input}". 
       
-      1. Confirm the channel name and @handle.
-      2. Find up to 10 recent videos that are:
-         - Over 6 minutes long.
-         - Related to: ${VIDEO_SELECTION_KEYWORDS.join(', ')}.
-         - NOT related to: ${EXCLUDED_KEYWORDS.join(', ')}.
+      1. Find the official channel name and @handle.
+      2. Extract a list of at least 15-20 videos uploaded within the PAST YEAR (last 12 months).
+      3. Focus on videos related to: ${VIDEO_SELECTION_KEYWORDS.join(', ')}.
+      4. EXCLUDE: ${EXCLUDED_KEYWORDS.join(', ')}.
       
       Return JSON: { "name": string, "handle": string, "description": string, "videos": [{ "title": string, "date": string, "url": string }] }`,
       config: {
