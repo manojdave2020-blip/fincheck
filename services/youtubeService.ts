@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { VIDEO_SELECTION_KEYWORDS, EXCLUDED_KEYWORDS } from "../constants";
 
@@ -29,32 +28,15 @@ export class YouTubeService {
       STEP 1: Identify official channel name, handle, and description.
       STEP 2: Retrieve up to 200 recent video titles from this channel.
       STEP 3: Apply the "Smart Video Selection Filter":
-        - Must be > 6 minutes (not a Short).
+        - MUST be > 6 minutes (not a Short).
         - Title or description MUST contain at least one: ${VIDEO_SELECTION_KEYWORDS.join(', ')}.
         - MUST NOT contain any: ${EXCLUDED_KEYWORDS.join(', ')}.
-      STEP 4: Select the top 10-15 most relevant/recent videos matching these criteria.`,
+      STEP 4: Select the top 10-20 most relevant/recent videos matching these criteria.
+      
+      Return as a JSON object with properties: name, handle, description, videos (array of {title, date, url}).`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            name: { type: "STRING" },
-            handle: { type: "STRING" },
-            description: { type: "STRING" },
-            videos: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  title: { type: "STRING" },
-                  date: { type: "STRING" },
-                  url: { type: "STRING" }
-                }
-              }
-            }
-          }
-        }
       },
     });
 
@@ -62,7 +44,7 @@ export class YouTubeService {
     
     return {
       name: data.name || input,
-      handle: data.handle || `@${input.replace(/\s/g, '')}`,
+      handle: data.handle || (input.startsWith('@') ? input : `@${input.replace(/\s/g, '')}`),
       avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${data.name || input}&backgroundColor=F1F5F9`,
       description: data.description || "Financial analyst and market commentator.",
       recentVideos: (data.videos || []).map((v: any, i: number) => ({
