@@ -2,17 +2,26 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Prediction, PredictionStatus, MarketDataPoint } from "../types";
 
+// Shim for process.env in browser environments
+if (typeof (window as any).process === 'undefined') {
+  (window as any).process = { env: {} };
+}
+
 export class GeminiService {
   /**
-   * Uses Flash for claim extraction. It's faster and sufficient for text parsing.
+   * Uses Flash for claim extraction.
    */
   async extractVideoClaims(videoTitle: string, videoUrl: string): Promise<{ 
     claims: Partial<Prediction>[], 
     isAnalysisHeavy: boolean 
   }> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("API_KEY is not defined. Please check your Vercel Environment Variables.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
     
-    // Switch to Flash for cost efficiency on simple text extraction
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Video: "${videoTitle}" (${videoUrl}). 
@@ -45,8 +54,7 @@ export class GeminiService {
   }
 
   /**
-   * Verifies a claim using Pro with Google Search grounding. 
-   * This is the only place we use the high-tier model for accuracy.
+   * Verifies a claim using Pro with Google Search grounding.
    */
   async verifyClaim(claim: string): Promise<{
     status: PredictionStatus;
@@ -54,7 +62,12 @@ export class GeminiService {
     explanation: string;
     marketData: MarketDataPoint[];
   }> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("API_KEY is not defined. Please check your Vercel Environment Variables.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: `Verify this financial target using Google Search for real-time market data: "${claim}". 

@@ -2,6 +2,11 @@
 import { GoogleGenAI } from "@google/genai";
 import { VIDEO_SELECTION_KEYWORDS, EXCLUDED_KEYWORDS } from "../constants";
 
+// Shim for process.env in browser environments
+if (typeof (window as any).process === 'undefined') {
+  (window as any).process = { env: {} };
+}
+
 export interface ResolvedChannel {
   name: string;
   handle: string;
@@ -16,14 +21,14 @@ export interface ResolvedChannel {
 }
 
 export class YouTubeService {
-  /**
-   * Efficiently resolves a channel using the faster Flash model.
-   * If the input is a known URL, it skips discovery and moves straight to filtering.
-   */
   async resolveChannel(input: string): Promise<ResolvedChannel> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("API_KEY is not defined. Please check your Vercel Environment Variables.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
     
-    // Using Flash instead of Pro for metadata discovery to save tokens/cost
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Search YouTube for "${input}". 

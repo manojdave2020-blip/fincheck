@@ -47,12 +47,19 @@ const HomePage: React.FC = () => {
 
   const performAudit = async (targetId: string, directUrl?: string) => {
     if (isResearching) return;
+
+    const seededAudits = JSON.parse(localStorage.getItem('seeded_audits') || '{}');
+    const cleanId = targetId.replace('@', '');
+    if (seededAudits[cleanId]) {
+       navigate(`/creator/${cleanId}`);
+       return;
+    }
+
     setIsResearching(true);
     setLog([]);
 
     try {
       addLog(`Connecting to ${targetId}...`);
-      // Use the direct URL if available to minimize Gemini search overhead
       const channelData = await ytService.resolveChannel(directUrl || targetId);
       
       const filteredVideos = channelData.recentVideos;
@@ -74,9 +81,13 @@ const HomePage: React.FC = () => {
 
       addLog(`Success. ${claims.length} claims identified.`);
       
-      // Update Registry
+      const today = new Date().toLocaleDateString();
       const history = JSON.parse(localStorage.getItem('audit_history') || '{}');
-      history[channelData.handle] = { count: claims.length, lastAudited: new Date().toLocaleDateString() };
+      history[channelData.handle] = { 
+        count: claims.length, 
+        lastAudited: today,
+        status: "Completed"
+      };
       localStorage.setItem('audit_history', JSON.stringify(history));
 
       const recent = JSON.parse(localStorage.getItem('recent_searches') || '[]');
@@ -96,8 +107,10 @@ const HomePage: React.FC = () => {
           }))
         } 
       });
-    } catch (err) {
-      addLog("Pipeline Error: Check API key or connection.");
+    } catch (err: any) {
+      console.error("Audit failed:", err);
+      addLog(`Error: ${err.message || "Pipeline interrupted."}`);
+      addLog("Check: Is API_KEY set in Vercel? Is the model available?");
       setIsResearching(false);
     }
   };
@@ -113,38 +126,69 @@ const HomePage: React.FC = () => {
         </h1>
         <p className="text-lg text-slate-600 max-w-2xl mx-auto">
           We use AI to extract price targets and real-time market data to verify them. 
-          Select a featured creator or add your own.
+          Audits auto-refresh daily to reflect current market performance.
         </p>
       </div>
 
       <div className="mb-16">
-        <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-8 text-center">Featured Creators</h2>
+        <div className="flex items-center justify-between mb-8 max-w-4xl mx-auto">
+          <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Featured Creators</h2>
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Live Audit Status</span>
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {PRELOADED_CREATORS.map((c) => (
-            <button
-              key={c.handle}
-              onClick={() => performAudit(c.handle, c.url)}
-              disabled={isResearching}
-              className="group bg-white border border-slate-200 p-6 rounded-3xl text-left hover:border-indigo-400 hover:shadow-xl transition-all disabled:opacity-50"
-            >
-              <div className="flex items-center gap-4 mb-4">
-                <img src={c.avatar} className="w-12 h-12 rounded-xl bg-slate-50" alt={c.name} />
-                <div>
-                  <h3 className="font-bold text-slate-900">{c.name}</h3>
-                  <span className="text-[10px] text-indigo-500 font-mono">{c.handle}</span>
+          {PRELOADED_CREATORS.map((c) => {
+            const stats = auditStats[c.handle];
+            return (
+              <button
+                key={c.handle}
+                onClick={() => performAudit(c.handle, c.url)}
+                disabled={isResearching}
+                className="group bg-white border border-slate-200 p-6 rounded-3xl text-left hover:border-indigo-400 hover:shadow-xl transition-all disabled:opacity-50 relative overflow-hidden"
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <img src={c.avatar} className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100" alt={c.name} />
+                  <div>
+                    <h3 className="font-bold text-slate-900 leading-tight">{c.name}</h3>
+                    <span className="text-[10px] text-indigo-500 font-mono tracking-tight">{c.handle}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="mt-4 flex justify-between items-end">
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Status</p>
-                  <p className="text-xs font-bold text-slate-600">
-                    {auditStats[c.handle] ? `${auditStats[c.handle].count} Claims Audited` : 'Not Audited'}
-                  </p>
+
+                <div className="mt-6 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</span>
+                    {stats ? (
+                      <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-100 uppercase">
+                        {stats.status || 'COMPLETED'}
+                      </span>
+                    ) : (
+                      <span className="bg-slate-50 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-100 uppercase">
+                        PENDING
+                      </span>
+                    )}
+                  </div>
+                  
+                  {stats && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-600">{stats.count} Verifiable Claims</span>
+                      </div>
+                      <div className="text-[9px] text-slate-400 font-medium uppercase tracking-wider">
+                        Auto-Refreshed: {stats.lastAudited}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <span className="text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform">→</span>
-              </div>
-            </button>
-          ))}
+
+                <div className="mt-6 pt-4 border-t border-slate-50 flex items-center justify-between">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{c.niche}</span>
+                  <span className="text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform">→</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -158,7 +202,7 @@ const HomePage: React.FC = () => {
         <input
           type="text"
           placeholder="YouTube URL or @handle..."
-          className="flex-grow px-6 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-lg shadow-sm"
+          className="flex-grow px-6 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-lg shadow-sm bg-white"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={isResearching}
@@ -177,7 +221,7 @@ const HomePage: React.FC = () => {
           {log.map((entry, i) => (
             <div key={i} className="text-slate-400 mb-1 flex gap-2">
               <span className="text-slate-600 select-none">›</span>
-              <span className={i === log.length - 1 ? "text-indigo-400" : ""}>{entry}</span>
+              <span className={i === log.length - 1 ? (entry.startsWith('Error') ? "text-rose-400" : "text-indigo-400") : ""}>{entry}</span>
             </div>
           ))}
         </div>
