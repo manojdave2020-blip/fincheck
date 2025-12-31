@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Prediction, PredictionStatus, MarketDataPoint } from "../types";
 
@@ -10,10 +9,8 @@ export class GeminiService {
     claims: Partial<Prediction>[], 
     isAnalysisHeavy: boolean 
   }> {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("API_KEY missing");
-
-    const ai = new GoogleGenAI({ apiKey });
+    // Correctly initialize GoogleGenAI using the process.env.API_KEY directly as required by guidelines.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -60,10 +57,8 @@ export class GeminiService {
     explanation: string;
     marketData: MarketDataPoint[];
   }> {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("API_KEY missing");
-
-    const ai = new GoogleGenAI({ apiKey });
+    // Correctly initialize GoogleGenAI using the process.env.API_KEY directly as required by guidelines.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Verify this prediction: "${claim}". Research historical prices and determine accuracy.`,

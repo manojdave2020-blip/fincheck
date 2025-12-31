@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { VIDEO_SELECTION_KEYWORDS } from "../constants";
 
@@ -17,12 +16,8 @@ export interface ResolvedChannel {
 
 export class YouTubeService {
   async resolveChannel(input: string): Promise<ResolvedChannel> {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      throw new Error("API Key is not configured. Please set the API_KEY environment variable.");
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
+    // Correctly initialize GoogleGenAI using the process.env.API_KEY directly as required by guidelines.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',

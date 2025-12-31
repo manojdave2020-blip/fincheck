@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import LeaderboardPage from './pages/LeaderboardPage';
@@ -12,7 +12,7 @@ const App: React.FC = () => {
   useEffect(() => {
     seedDatabase();
     // Force dark mode aesthetic by setting background on body
-    document.body.className = 'bg-slate-950 text-slate-200 antialiased';
+    document.body.className = 'bg-slate-950 text-slate-200 antialiased overflow-x-hidden';
   }, []);
 
   return (
