@@ -10,8 +10,9 @@ import { seedDatabase } from './services/seedService';
 
 const App: React.FC = () => {
   useEffect(() => {
-    // Audit and pre-load the data for the requested creators
     seedDatabase();
+    // Force dark mode aesthetic by setting background on body
+    document.body.className = 'bg-slate-950 text-slate-200 antialiased';
   }, []);
 
   return (

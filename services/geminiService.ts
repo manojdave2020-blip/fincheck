@@ -10,6 +10,7 @@ export class GeminiService {
     claims: Partial<Prediction>[], 
     isAnalysisHeavy: boolean 
   }> {
+    // Create new instance at call time to use process.env.API_KEY
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const response = await ai.models.generateContent({
@@ -44,7 +45,28 @@ export class GeminiService {
       }
     });
 
-    const claims = JSON.parse(response.text || '[]');
+    let claims: Partial<Prediction>[] = [];
+    try {
+      const text = response.text || '[]';
+      const jsonStr = text.includes('```json') ? text.split('```json')[1].split('```')[0] : text;
+      claims = JSON.parse(jsonStr);
+    } catch (e) {
+      console.error("Failed to parse claims JSON", e);
+    }
+
+    // Extract URLs from grounding metadata
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    if (sources.length > 0) {
+      const sourceLinks = sources
+        .filter((chunk: any) => chunk.web)
+        .map((chunk: any) => `${chunk.web.title}: ${chunk.web.uri}`)
+        .join(', ');
+      
+      if (claims.length > 0) {
+         claims[0].explanation = `Initial Discovery via: ${sourceLinks}`;
+      }
+    }
+
     return {
       claims,
       isAnalysisHeavy: claims.length > 5
@@ -62,7 +84,7 @@ export class GeminiService {
   }> {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: "gemini-3-flash-preview",
       contents: `Perform a factual audit on this financial prediction: "${claim}". 
       Use Google Search to find historical price data for the asset during the predicted timeframe.
       Determine if the target was met.`,
@@ -73,7 +95,7 @@ export class GeminiService {
           type: Type.OBJECT,
           properties: {
             status: { type: Type.STRING, enum: ["Accurate", "Partially Accurate", "Inaccurate", "Pending Outcome"] },
-            score: { type: Type.NUMBER, description: "Confidence/Accuracy score from 0.0 to 1.0" },
+            score: { type: Type.NUMBER, description: "Confidence score from 0.0 to 1.0" },
             explanation: { type: Type.STRING },
             marketData: {
               type: Type.ARRAY,
@@ -92,16 +114,29 @@ export class GeminiService {
       }
     });
 
-    const result = JSON.parse(response.text || '{}');
+    let result = {
+      status: PredictionStatus.PENDING,
+      score: 0,
+      explanation: "Verification logic failed to parse.",
+      marketData: []
+    };
+
+    try {
+      const text = response.text || '{}';
+      const jsonStr = text.includes('```json') ? text.split('```json')[1].split('```')[0] : text;
+      result = JSON.parse(jsonStr);
+    } catch (e) {
+      console.error("Failed to parse verification JSON", e);
+    }
     
-    // Extract URLs from grounding if available to satisfy requirements
+    // Extract sources as per grounding rules
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     if (sources.length > 0) {
       const sourceLinks = sources
         .filter((chunk: any) => chunk.web)
-        .map((chunk: any) => `Source: ${chunk.web.title} (${chunk.web.uri})`)
+        .map((chunk: any) => `• ${chunk.web.title}: ${chunk.web.uri}`)
         .join('\n');
-      result.explanation += `\n\nVerified via:\n${sourceLinks}`;
+      result.explanation = (result.explanation || '') + `\n\nVerified via:\n${sourceLinks}`;
     }
 
     return result;

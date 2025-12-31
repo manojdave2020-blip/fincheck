@@ -1,142 +1,172 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { YouTubeService } from '../services/youtubeService';
+import { YouTubeService, ResolvedChannel } from '../services/youtubeService';
 
-const PRELOADED_CREATORS = [
-  {
-    name: "Akshat Shrivastava",
-    handle: "@AkshatZayn",
-    url: "https://www.youtube.com/@AkshatZayn",
-    avatar: "https://api.dicebear.com/7.x/initials/svg?seed=Akshat&backgroundColor=b6e3f4",
-    niche: "Macro & Strategy"
-  },
-  {
-    name: "CA Rachana Ranade",
-    handle: "@CARachanaRanade",
-    url: "https://www.youtube.com/@CARachanaRanade",
-    avatar: "https://api.dicebear.com/7.x/initials/svg?seed=Rachana&backgroundColor=ffdfbf",
-    niche: "Stock Analysis"
-  },
-  {
-    name: "Udayan Adhye",
-    handle: "@udayanadhye",
-    url: "https://www.youtube.com/@udayanadhye",
-    avatar: "https://api.dicebear.com/7.x/initials/svg?seed=Udayan&backgroundColor=d1d4f9",
-    niche: "Equity Research"
-  }
+const FEATURED_CHANNELS = [
+  { name: "Akshat Shrivastava", handle: "@AkshatZayn", niche: "Macro Strategy", avatar: "AS" },
+  { name: "CA Rachana Ranade", handle: "@CARachanaRanade", niche: "Fundamental Analysis", avatar: "RR" },
+  { name: "Pranjal Kamra", handle: "@PranjalKamra", niche: "Personal Finance", avatar: "PK" }
 ];
 
 const HomePage: React.FC = () => {
   const [input, setInput] = useState('');
   const [isResearching, setIsResearching] = useState(false);
-  const [log, setLog] = useState<string[]>([]);
+  const [log, setLog] = useState<{msg: string, type: 'info' | 'success' | 'error'}[]>([]);
+  const [detectedChannel, setDetectedChannel] = useState<ResolvedChannel | null>(null);
   const navigate = useNavigate();
   
   const ytService = new YouTubeService();
 
-  const addLog = (msg: string) => setLog(prev => [...prev, msg]);
+  const addLog = (msg: string, type: 'info' | 'success' | 'error' = 'info') => 
+    setLog(prev => [...prev, { msg, type }]);
 
-  const startChannelResolution = async (targetId: string, directUrl?: string) => {
+  const handleSearch = async (target: string) => {
     if (isResearching) return;
-
     setIsResearching(true);
     setLog([]);
+    setDetectedChannel(null);
 
     try {
-      addLog(`Resolving channel for ${targetId}...`);
-      const channelData = await ytService.resolveChannel(directUrl || targetId);
-      addLog(`Found ${channelData.name}. Accessing video library...`);
-      addLog(`Success! Retrived ${channelData.recentVideos.length} videos from the past year.`);
+      addLog(`Initializing research probe for: ${target}...`);
+      addLog(`Connecting to Google Search Grounding nodes...`);
       
+      const channelData = await ytService.resolveChannel(target);
+      
+      addLog(`Identity confirmed: ${channelData.name}`, 'success');
+      addLog(`Scanning metadata for ${channelData.handle}...`);
+      addLog(`Retrieved ${channelData.recentVideos.length} prediction-eligible videos.`, 'success');
+      
+      setDetectedChannel(channelData);
+      
+      // Update recent searches
       const recent = JSON.parse(localStorage.getItem('recent_searches') || '[]');
       const newEntry = { id: channelData.handle, name: channelData.name, avatar: channelData.avatar };
       localStorage.setItem('recent_searches', JSON.stringify([newEntry, ...recent.filter((r: any) => r.id !== newEntry.id)].slice(0, 10)));
 
-      // Redirect to profile with video list
-      navigate(`/creator/${channelData.handle.replace('@', '')}`, { 
-        state: { 
-          creator: { ...channelData },
-          videos: channelData.recentVideos
-        } 
-      });
     } catch (err: any) {
-      console.error("Resolution failed:", err);
-      addLog(`Error: ${err.message || "Failed to find channel data."}`);
+      addLog(`Error: ${err.message || "Failed to resolve entity."}`, 'error');
+    } finally {
       setIsResearching(false);
     }
   };
 
+  const confirmAndProceed = () => {
+    if (!detectedChannel) return;
+    navigate(`/creator/${detectedChannel.handle.replace('@', '')}`, { 
+      state: { 
+        creator: { ...detectedChannel },
+        videos: detectedChannel.recentVideos
+      } 
+    });
+  };
+
   return (
-    <div className="max-w-6xl mx-auto px-4 py-16">
+    <div className="max-w-5xl mx-auto px-4 py-12 md:py-24">
+      {/* Hero Header */}
       <div className="text-center mb-16">
-        <div className="inline-block px-4 py-1.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold uppercase tracking-widest rounded-full mb-6 border border-indigo-100">
-          Accuracy Registry v2
+        <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full mb-6">
+          <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
+          <span className="text-indigo-400 text-[10px] font-bold uppercase tracking-[0.2em]">Alpha Audit Engine</span>
         </div>
-        <h1 className="text-5xl font-bold text-slate-900 mb-6 tracking-tight leading-tight">
-          Trust, but <span className="text-indigo-600 italic">Audit.</span>
+        <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-6 tracking-tight">
+          Quantify the <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">Signal.</span>
         </h1>
-        <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-          Audit any FinFluencer's predictions from the past year. Extract claims from specific videos and verify them against live market results.
+        <p className="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed">
+          The public registry for financial accountability. Ingest any YouTube channel to audit their historical accuracy using live market grounding.
         </p>
       </div>
 
-      <div className="mb-16">
-        <div className="flex items-center justify-between mb-8 max-w-4xl mx-auto">
-          <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Select to Review Videos</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {PRELOADED_CREATORS.map((c) => (
-            <button
-              key={c.handle}
-              onClick={() => startChannelResolution(c.handle, c.url)}
+      {/* Main Search */}
+      <div className="max-w-2xl mx-auto mb-20">
+        <div className="relative group">
+          <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-3xl blur opacity-20 group-focus-within:opacity-40 transition duration-500"></div>
+          <form 
+            onSubmit={(e) => { e.preventDefault(); handleSearch(input); }} 
+            className="relative flex gap-2 bg-slate-900 border border-slate-800 p-2 rounded-2xl shadow-2xl"
+          >
+            <input
+              type="text"
+              placeholder="Search creator name, @handle or channel URL..."
+              className="flex-grow bg-transparent px-5 py-3 text-white outline-none placeholder:text-slate-600 font-medium"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
               disabled={isResearching}
-              className="group bg-white border border-slate-200 p-6 rounded-3xl text-left hover:border-indigo-400 hover:shadow-xl transition-all disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={isResearching || !input.trim()}
+              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center gap-2"
             >
-              <div className="flex items-center gap-4 mb-4">
-                <img src={c.avatar} className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100" alt={c.name} />
-                <div>
-                  <h3 className="font-bold text-slate-900 leading-tight">{c.name}</h3>
-                  <span className="text-[10px] text-indigo-500 font-mono tracking-tight">{c.handle}</span>
-                </div>
-              </div>
-              <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{c.niche}</span>
-                <span className="text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform">Browse Content →</span>
-              </div>
+              {isResearching ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              ) : (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              )}
+              <span>Audit</span>
             </button>
-          ))}
+          </form>
         </div>
+
+        {/* Real-time Log */}
+        {log.length > 0 && (
+          <div className="mt-8 bg-slate-950/50 border border-slate-800/50 rounded-2xl p-6 font-mono text-[11px] space-y-2 shadow-inner">
+            {log.map((entry, i) => (
+              <div key={i} className="flex gap-3">
+                <span className="text-slate-700 select-none">[{new Date().toLocaleTimeString([], {hour12: false})}]</span>
+                <span className={entry.type === 'success' ? 'text-emerald-400' : entry.type === 'error' ? 'text-rose-400' : 'text-slate-400'}>
+                  {entry.msg}
+                </span>
+              </div>
+            ))}
+            
+            {/* Detection Card */}
+            {detectedChannel && (
+              <div className="mt-6 p-5 bg-slate-900 border border-indigo-500/30 rounded-xl flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <img src={detectedChannel.avatar} className="w-14 h-14 rounded-lg shadow-lg" alt="" />
+                <div className="flex-grow">
+                  <h4 className="text-white font-bold text-sm">{detectedChannel.name}</h4>
+                  <p className="text-slate-500 text-[10px] uppercase tracking-wider">{detectedChannel.handle}</p>
+                </div>
+                <button 
+                  onClick={confirmAndProceed}
+                  className="bg-white text-slate-950 px-4 py-2 rounded-lg font-bold text-xs hover:bg-indigo-50 transition-colors"
+                >
+                  Confirm & Audit Videos
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      <form onSubmit={(e) => { e.preventDefault(); startChannelResolution(input); }} className="max-w-2xl mx-auto flex gap-3 mt-8">
-        <input
-          type="text"
-          placeholder="Enter Channel @handle or URL..."
-          className="flex-grow px-6 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-lg shadow-sm bg-white"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={isResearching}
-        />
-        <button
-          type="submit"
-          disabled={isResearching || !input.trim()}
-          className="px-8 py-4 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition-all disabled:opacity-50 shadow-lg"
-        >
-          {isResearching ? 'Accessing...' : 'Review Channel'}
-        </button>
-      </form>
-
-      {log.length > 0 && (
-        <div className="mt-12 bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-2xl font-mono text-xs max-w-2xl mx-auto">
-          {log.map((entry, i) => (
-            <div key={i} className="text-slate-400 mb-1 flex gap-2">
-              <span className="text-slate-600 select-none">›</span>
-              <span className={i === log.length - 1 ? (entry.startsWith('Error') ? "text-rose-400" : "text-indigo-400") : ""}>{entry}</span>
+      {/* Quick Picks */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {FEATURED_CHANNELS.map((c) => (
+          <button
+            key={c.handle}
+            onClick={() => handleSearch(c.handle)}
+            disabled={isResearching}
+            className="group bg-slate-900/40 border border-slate-800 p-6 rounded-2xl text-left hover:border-slate-700 hover:bg-slate-900/60 transition-all text-sm"
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center font-bold text-indigo-400 group-hover:scale-110 transition-transform">
+                {c.avatar}
+              </div>
+              <div>
+                <h3 className="text-white font-bold tracking-tight">{c.name}</h3>
+                <span className="text-slate-500 text-[10px] font-mono">{c.handle}</span>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-slate-600 group-hover:text-indigo-400 transition-colors">
+              <span>{c.niche}</span>
+              <span className="opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">Audit →</span>
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 };
