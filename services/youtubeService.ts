@@ -2,11 +2,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { VIDEO_SELECTION_KEYWORDS, EXCLUDED_KEYWORDS } from "../constants";
 
-// Shim for process.env in browser environments
-if (typeof (window as any).process === 'undefined') {
-  (window as any).process = { env: {} };
-}
-
 export interface ResolvedChannel {
   name: string;
   handle: string;
@@ -22,23 +17,18 @@ export interface ResolvedChannel {
 
 export class YouTubeService {
   async resolveChannel(input: string): Promise<ResolvedChannel> {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      throw new Error("API_KEY is not defined.");
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Search YouTube for the channel "${input}". 
+      contents: `Find the YouTube channel for "${input}". 
+      1. Get official name and handle.
+      2. List 15-20 distinct videos from the PAST 12 MONTHS that contain financial predictions, stock analysis, or market forecasts.
+      3. Avoid Shorts, Interviews, or Vlogs.
       
-      1. Find the official channel name and @handle.
-      2. Extract a list of at least 15-20 videos uploaded within the PAST YEAR (last 12 months).
-      3. Focus on videos related to: ${VIDEO_SELECTION_KEYWORDS.join(', ')}.
-      4. EXCLUDE: ${EXCLUDED_KEYWORDS.join(', ')}.
+      Keywords to prioritize: ${VIDEO_SELECTION_KEYWORDS.join(', ')}.
       
-      Return JSON: { "name": string, "handle": string, "description": string, "videos": [{ "title": string, "date": string, "url": string }] }`,
+      Return as JSON with fields: name, handle, description, videos (title, date, url).`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -51,7 +41,7 @@ export class YouTubeService {
       name: data.name || input,
       handle: data.handle || (input.startsWith('@') ? input : `@${input.replace(/\s/g, '')}`),
       avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${data.name || input}&backgroundColor=F1F5F9`,
-      description: data.description || "Verified Creator Profile.",
+      description: data.description || "Researching verified creator content...",
       recentVideos: (data.videos || []).map((v: any, i: number) => ({
         id: `v-${i}-${Date.now()}`,
         title: v.title,

@@ -2,31 +2,29 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Prediction, PredictionStatus, MarketDataPoint } from "../types";
 
-// Shim for process.env in browser environments
-if (typeof (window as any).process === 'undefined') {
-  (window as any).process = { env: {} };
-}
-
 export class GeminiService {
   /**
-   * Uses Flash for claim extraction.
+   * Uses Gemini to extract specific verifiable financial claims from a video's context.
    */
   async extractVideoClaims(videoTitle: string, videoUrl: string): Promise<{ 
     claims: Partial<Prediction>[], 
     isAnalysisHeavy: boolean 
   }> {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      throw new Error("API_KEY is not defined. Please check your Vercel Environment Variables.");
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Video: "${videoTitle}" (${videoUrl}). 
-      Find specific, verifiable financial predictions (Price Targets, Buy/Sell calls).
-      Only include claims with a clear asset, target price, and timeframe.`,
+      contents: `Video Title: "${videoTitle}"
+      Video Source: ${videoUrl}
+
+      Analyze the likely content based on this video metadata.
+      Find specific, verifiable financial predictions (e.g., "Nifty to hit 25k by December", "Buy Reliance at 2800").
+      Only include claims that specify:
+      1. An asset name
+      2. A target price or percentage move
+      3. A specific timeframe or deadline
+      
+      Return a JSON array of claims. Include a 'timestamp' in MM:SS format where the claim likely occurs.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -35,12 +33,12 @@ export class GeminiService {
           items: {
             type: Type.OBJECT,
             properties: {
-              rawQuote: { type: Type.STRING },
-              timestamp: { type: Type.STRING },
-              structuredClaim: { type: Type.STRING },
+              rawQuote: { type: Type.STRING, description: "The verbatim or paraphrased prediction." },
+              timestamp: { type: Type.STRING, description: "MM:SS format." },
+              structuredClaim: { type: Type.STRING, description: "Short summary: Asset @ Price by Date." },
               asset: { type: Type.STRING }
             },
-            required: ["rawQuote", "structuredClaim", "asset"]
+            required: ["rawQuote", "structuredClaim", "asset", "timestamp"]
           }
         }
       }
@@ -54,7 +52,7 @@ export class GeminiService {
   }
 
   /**
-   * Verifies a claim using Pro with Google Search grounding.
+   * Verifies a specific claim using Google Search grounding.
    */
   async verifyClaim(claim: string): Promise<{
     status: PredictionStatus;
@@ -62,16 +60,12 @@ export class GeminiService {
     explanation: string;
     marketData: MarketDataPoint[];
   }> {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      throw new Error("API_KEY is not defined. Please check your Vercel Environment Variables.");
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
-      contents: `Verify this financial target using Google Search for real-time market data: "${claim}". 
-      Check if the price was hit during the mentioned timeframe. Provide proof data.`,
+      contents: `Perform a factual audit on this financial prediction: "${claim}". 
+      Use Google Search to find historical price data for the asset during the predicted timeframe.
+      Determine if the target was met.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -79,7 +73,7 @@ export class GeminiService {
           type: Type.OBJECT,
           properties: {
             status: { type: Type.STRING, enum: ["Accurate", "Partially Accurate", "Inaccurate", "Pending Outcome"] },
-            score: { type: Type.NUMBER },
+            score: { type: Type.NUMBER, description: "Confidence/Accuracy score from 0.0 to 1.0" },
             explanation: { type: Type.STRING },
             marketData: {
               type: Type.ARRAY,
@@ -98,6 +92,18 @@ export class GeminiService {
       }
     });
 
-    return JSON.parse(response.text || '{}');
+    const result = JSON.parse(response.text || '{}');
+    
+    // Extract URLs from grounding if available to satisfy requirements
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    if (sources.length > 0) {
+      const sourceLinks = sources
+        .filter((chunk: any) => chunk.web)
+        .map((chunk: any) => `Source: ${chunk.web.title} (${chunk.web.uri})`)
+        .join('\n');
+      result.explanation += `\n\nVerified via:\n${sourceLinks}`;
+    }
+
+    return result;
   }
 }
