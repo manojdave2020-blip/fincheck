@@ -10,22 +10,16 @@ export class GeminiService {
     claims: Partial<Prediction>[], 
     isAnalysisHeavy: boolean 
   }> {
-    // Create new instance at call time to use process.env.API_KEY
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) throw new Error("API_KEY missing");
+
+    const ai = new GoogleGenAI({ apiKey });
     
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Video Title: "${videoTitle}"
-      Video Source: ${videoUrl}
-
-      Analyze the likely content based on this video metadata.
-      Find specific, verifiable financial predictions (e.g., "Nifty to hit 25k by December", "Buy Reliance at 2800").
-      Only include claims that specify:
-      1. An asset name
-      2. A target price or percentage move
-      3. A specific timeframe or deadline
-      
-      Return a JSON array of claims. Include a 'timestamp' in MM:SS format where the claim likely occurs.`,
+      contents: `Video Context: "${videoTitle}" (${videoUrl})
+      Extract 1-3 specific, verifiable financial predictions.
+      Claims must have: Asset, Target, and a clear Timeframe.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -34,9 +28,9 @@ export class GeminiService {
           items: {
             type: Type.OBJECT,
             properties: {
-              rawQuote: { type: Type.STRING, description: "The verbatim or paraphrased prediction." },
-              timestamp: { type: Type.STRING, description: "MM:SS format." },
-              structuredClaim: { type: Type.STRING, description: "Short summary: Asset @ Price by Date." },
+              rawQuote: { type: Type.STRING },
+              timestamp: { type: Type.STRING },
+              structuredClaim: { type: Type.STRING },
               asset: { type: Type.STRING }
             },
             required: ["rawQuote", "structuredClaim", "asset", "timestamp"]
@@ -51,26 +45,10 @@ export class GeminiService {
       const jsonStr = text.includes('```json') ? text.split('```json')[1].split('```')[0] : text;
       claims = JSON.parse(jsonStr);
     } catch (e) {
-      console.error("Failed to parse claims JSON", e);
+      console.error("Claims Parse Error", e);
     }
 
-    // Extract URLs from grounding metadata
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    if (sources.length > 0) {
-      const sourceLinks = sources
-        .filter((chunk: any) => chunk.web)
-        .map((chunk: any) => `${chunk.web.title}: ${chunk.web.uri}`)
-        .join(', ');
-      
-      if (claims.length > 0) {
-         claims[0].explanation = `Initial Discovery via: ${sourceLinks}`;
-      }
-    }
-
-    return {
-      claims,
-      isAnalysisHeavy: claims.length > 5
-    };
+    return { claims, isAnalysisHeavy: claims.length > 3 };
   }
 
   /**
@@ -82,12 +60,13 @@ export class GeminiService {
     explanation: string;
     marketData: MarketDataPoint[];
   }> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) throw new Error("API_KEY missing");
+
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Perform a factual audit on this financial prediction: "${claim}". 
-      Use Google Search to find historical price data for the asset during the predicted timeframe.
-      Determine if the target was met.`,
+      contents: `Verify this prediction: "${claim}". Research historical prices and determine accuracy.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -95,7 +74,7 @@ export class GeminiService {
           type: Type.OBJECT,
           properties: {
             status: { type: Type.STRING, enum: ["Accurate", "Partially Accurate", "Inaccurate", "Pending Outcome"] },
-            score: { type: Type.NUMBER, description: "Confidence score from 0.0 to 1.0" },
+            score: { type: Type.NUMBER },
             explanation: { type: Type.STRING },
             marketData: {
               type: Type.ARRAY,
@@ -117,7 +96,7 @@ export class GeminiService {
     let result = {
       status: PredictionStatus.PENDING,
       score: 0,
-      explanation: "Verification logic failed to parse.",
+      explanation: "Verification failed.",
       marketData: []
     };
 
@@ -126,17 +105,7 @@ export class GeminiService {
       const jsonStr = text.includes('```json') ? text.split('```json')[1].split('```')[0] : text;
       result = JSON.parse(jsonStr);
     } catch (e) {
-      console.error("Failed to parse verification JSON", e);
-    }
-    
-    // Extract sources as per grounding rules
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    if (sources.length > 0) {
-      const sourceLinks = sources
-        .filter((chunk: any) => chunk.web)
-        .map((chunk: any) => `• ${chunk.web.title}: ${chunk.web.uri}`)
-        .join('\n');
-      result.explanation = (result.explanation || '') + `\n\nVerified via:\n${sourceLinks}`;
+      console.error("Verification Parse Error", e);
     }
 
     return result;

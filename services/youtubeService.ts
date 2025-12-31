@@ -17,25 +17,30 @@ export interface ResolvedChannel {
 
 export class YouTubeService {
   async resolveChannel(input: string): Promise<ResolvedChannel> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("API Key is not configured. Please set the API_KEY environment variable.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
     
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Find the official YouTube channel for the financial creator: "${input}". 
+      contents: `Perform a deep research probe to find the official YouTube channel for: "${input}". 
       
-      Researching Phase:
-      1. Use Google Search to verify the channel handle and official name.
-      2. Identify the core niche (e.g., Value Investing, Macro Strategy, Crypto).
-      3. Locate 15-20 distinct videos from the LAST 12 MONTHS where the creator makes SPECIFIC market predictions or gives targeted stock advice.
-      4. Avoid non-financial content, life vlogs, or general news reactions.
+      Requirements:
+      1. Use Google Search grounding to identify the verified channel handle and official name.
+      2. Analyze the channel's niche to ensure it is a financial creator (Stocks, Crypto, Macro).
+      3. Locate 15-20 distinct videos from the LAST 12 MONTHS where the creator makes SPECIFIC market predictions, targets, or forecasts.
+      4. Do not include generic news or non-verifiable content.
       
-      Keywords to prioritize: ${VIDEO_SELECTION_KEYWORDS.join(', ')}.
+      Keywords: ${VIDEO_SELECTION_KEYWORDS.join(', ')}.
       
-      Return as strictly valid JSON with the following structure:
+      Output Schema:
       {
-        "name": "Full Channel Name",
+        "name": "Full Creator Name",
         "handle": "@handle",
-        "description": "Short bio summary",
+        "description": "Short metadata bio",
         "videos": [{"title": "Video Title", "date": "Month Year", "url": "https://youtube.com/..."}]
       }`,
       config: {
@@ -71,20 +76,19 @@ export class YouTubeService {
       const jsonStr = text.includes('```json') ? text.split('```json')[1].split('```')[0] : text;
       data = JSON.parse(jsonStr);
     } catch (e) {
-      console.error("Failed to parse channel JSON", e);
-      throw new Error("Target entity resolution timed out or returned invalid data.");
+      console.error("JSON Resolution Error", e);
+      throw new Error("The Audit Engine could not parse the channel's metadata correctly.");
     }
 
-    // Handle missing or partial data
-    if (!data.name || !data.videos) {
-       throw new Error("Could not find a matching YouTube channel with verifiable financial content.");
+    if (!data.name || !data.videos || data.videos.length === 0) {
+       throw new Error("No verifiable financial content found for this entity.");
     }
 
     return {
       name: data.name,
       handle: data.handle || `@${data.name.replace(/\s/g, '')}`,
       avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${data.name}&backgroundColor=6366f1&textColor=ffffff`,
-      description: data.description || "Active financial research entity.",
+      description: data.description || "Active Financial Analyst",
       recentVideos: data.videos.map((v: any, i: number) => ({
         id: `v-${i}-${Date.now()}`,
         title: v.title,

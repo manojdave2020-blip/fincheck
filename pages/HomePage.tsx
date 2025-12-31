@@ -39,13 +39,14 @@ const HomePage: React.FC = () => {
       
       setDetectedChannel(channelData);
       
-      // Update recent searches
+      // Save to recent searches
       const recent = JSON.parse(localStorage.getItem('recent_searches') || '[]');
       const newEntry = { id: channelData.handle, name: channelData.name, avatar: channelData.avatar };
       localStorage.setItem('recent_searches', JSON.stringify([newEntry, ...recent.filter((r: any) => r.id !== newEntry.id)].slice(0, 10)));
 
     } catch (err: any) {
-      addLog(`Error: ${err.message || "Failed to resolve entity."}`, 'error');
+      addLog(`Error: ${err.message || "Failed to resolve entity. Check your API configuration."}`, 'error');
+      console.error(err);
     } finally {
       setIsResearching(false);
     }
@@ -87,7 +88,7 @@ const HomePage: React.FC = () => {
           >
             <input
               type="text"
-              placeholder="Search creator name, @handle or channel URL..."
+              placeholder="Enter creator name or @handle..."
               className="flex-grow bg-transparent px-5 py-3 text-white outline-none placeholder:text-slate-600 font-medium"
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -110,31 +111,34 @@ const HomePage: React.FC = () => {
           </form>
         </div>
 
-        {/* Real-time Log */}
+        {/* Discovery Engine Status Log */}
         {log.length > 0 && (
-          <div className="mt-8 bg-slate-950/50 border border-slate-800/50 rounded-2xl p-6 font-mono text-[11px] space-y-2 shadow-inner">
+          <div className="mt-8 bg-slate-950 border border-slate-800 rounded-2xl p-6 font-mono text-[11px] space-y-2 shadow-2xl overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4">
+               <div className="text-slate-800 font-bold uppercase tracking-widest text-[9px]">Engine Status: Active</div>
+            </div>
             {log.map((entry, i) => (
-              <div key={i} className="flex gap-3">
+              <div key={i} className="flex gap-3 animate-in fade-in slide-in-from-left-2">
                 <span className="text-slate-700 select-none">[{new Date().toLocaleTimeString([], {hour12: false})}]</span>
                 <span className={entry.type === 'success' ? 'text-emerald-400' : entry.type === 'error' ? 'text-rose-400' : 'text-slate-400'}>
-                  {entry.msg}
+                  {entry.type === 'error' ? '! ' : '> '}{entry.msg}
                 </span>
               </div>
             ))}
             
             {/* Detection Card */}
             {detectedChannel && (
-              <div className="mt-6 p-5 bg-slate-900 border border-indigo-500/30 rounded-xl flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <img src={detectedChannel.avatar} className="w-14 h-14 rounded-lg shadow-lg" alt="" />
+              <div className="mt-6 p-5 bg-indigo-500/5 border border-indigo-500/30 rounded-xl flex items-center gap-4 animate-in fade-in zoom-in duration-500">
+                <img src={detectedChannel.avatar} className="w-14 h-14 rounded-lg shadow-lg border border-indigo-500/20" alt="" />
                 <div className="flex-grow">
                   <h4 className="text-white font-bold text-sm">{detectedChannel.name}</h4>
-                  <p className="text-slate-500 text-[10px] uppercase tracking-wider">{detectedChannel.handle}</p>
+                  <p className="text-indigo-400/60 text-[10px] uppercase tracking-wider font-bold">{detectedChannel.handle}</p>
                 </div>
                 <button 
                   onClick={confirmAndProceed}
-                  className="bg-white text-slate-950 px-4 py-2 rounded-lg font-bold text-xs hover:bg-indigo-50 transition-colors"
+                  className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-bold text-xs hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20"
                 >
-                  Confirm & Audit Videos
+                  Confirm Entity
                 </button>
               </div>
             )}
@@ -142,14 +146,14 @@ const HomePage: React.FC = () => {
         )}
       </div>
 
-      {/* Quick Picks */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Suggested Ingestions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 opacity-60 hover:opacity-100 transition-opacity">
         {FEATURED_CHANNELS.map((c) => (
           <button
             key={c.handle}
             onClick={() => handleSearch(c.handle)}
             disabled={isResearching}
-            className="group bg-slate-900/40 border border-slate-800 p-6 rounded-2xl text-left hover:border-slate-700 hover:bg-slate-900/60 transition-all text-sm"
+            className="group bg-slate-900/40 border border-slate-800 p-6 rounded-2xl text-left hover:border-indigo-500/50 hover:bg-slate-900/60 transition-all text-sm"
           >
             <div className="flex items-center gap-4 mb-4">
               <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center font-bold text-indigo-400 group-hover:scale-110 transition-transform">
@@ -162,7 +166,7 @@ const HomePage: React.FC = () => {
             </div>
             <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-slate-600 group-hover:text-indigo-400 transition-colors">
               <span>{c.niche}</span>
-              <span className="opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">Audit →</span>
+              <span className="opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">Quick Audit →</span>
             </div>
           </button>
         ))}
